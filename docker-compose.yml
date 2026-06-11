@@ -1,0 +1,12 @@
+services:
+  app:
+    build: .
+    container_name: neon-etf-analyzer
+    ports:
+      - "8080:8080"
+    environment:
+      ETF_ANALYZER_DB: /data/etf_analyzer.sqlite3
+      NEON_INVEST_URLS: "https://www.neon-free.ch/en/invest/"
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

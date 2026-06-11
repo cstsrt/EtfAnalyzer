@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>neon ETF Analyzer</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
+  </head>
+  <body>
+    <main class="shell">
+      <section class="hero">
+        <div>
+          <p class="eyebrow">neon Switzerland · ETF cockpit</p>
+          <h1>Choose investments with calmer numbers.</h1>
+          <p class="hero-copy">
+            Track neon investment products, enrich them from justETF, compare history, and export
+            a clean data pack for deeper analysis.
+          </p>
+        </div>
+        <div class="hero-card">
+          <span class="hero-card-label">Database</span>
+          <strong id="totalProducts">0 products</strong>
+          <span id="lastSync">No sync yet</span>
+        </div>
+      </section>
+
+      <section class="panel control-panel">
+        <div class="control-grid">
+          <label>
+            Search
+            <input id="searchInput" placeholder="Name, ticker, ISIN" />
+          </label>
+          <label>
+            Scope
+            <select id="scopeInput">
+              <option value="neon">neon products</option>
+              <option value="all">All ETFs in database</option>
+            </select>
+          </label>
+          <label>
+            Asset class
+            <select id="assetClassInput"></select>
+          </label>
+          <label>
+            Region
+            <select id="regionInput"></select>
+          </label>
+          <label>
+            Currency
+            <select id="currencyInput"></select>
+          </label>
+          <label>
+            Distribution
+            <select id="distributionInput"></select>
+          </label>
+          <label>
+            Replication
+            <select id="replicationInput"></select>
+          </label>
+          <label>
+            Max TER %
+            <input id="maxTerInput" type="number" min="0" step="0.01" placeholder="0.30" />
+          </label>
+          <label>
+            Min fund size
+            <input id="minFundSizeInput" type="number" min="0" step="50" placeholder="500" />
+          </label>
+          <label>
+            Max risk
+            <input id="maxRiskInput" type="number" min="1" max="7" step="1" placeholder="5" />
+          </label>
+          <label>
+            Sort by
+            <select id="sortInput">
+              <option value="name">Name</option>
+              <option value="ter">TER</option>
+              <option value="fund_size_mn">Fund size</option>
+              <option value="return_1y">1Y return</option>
+              <option value="return_3y">3Y return</option>
+              <option value="return_5y">5Y return</option>
+              <option value="max_drawdown">Max drawdown</option>
+            </select>
+          </label>
+        </div>
+        <div class="actions">
+          <button id="applyFiltersButton">Apply filters</button>
+          <button id="scanNeonButton" class="secondary">Scan neon pages</button>
+          <button id="refreshOverviewButton" class="secondary">Refresh justETF overview</button>
+          <button id="refreshProfilesButton" class="secondary">Refresh selected profiles</button>
+          <button id="refreshChartsButton" class="secondary">Refresh selected charts</button>
+          <a class="button ghost" href="/api/export/snapshot" target="_blank" rel="noreferrer">Export JSON</a>
+        </div>
+      </section>
+
+      <section class="split">
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Manual seed</p>
+              <h2>Add neon ETF ISINs</h2>
+            </div>
+          </div>
+          <div class="manual-add">
+            <textarea id="manualIsins" placeholder="Paste ISINs, separated by commas or spaces"></textarea>
+            <button id="addIsinsButton">Add products</button>
+          </div>
+          <p class="hint">
+            If neon does not expose a machine-readable product list, this is the reliable path:
+            add ISINs once, then refresh justETF data.
+          </p>
+        </div>
+
+        <div class="panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Context</p>
+              <h2>Market event notes</h2>
+            </div>
+          </div>
+          <div class="event-form">
+            <input id="eventDate" type="date" />
+            <input id="eventTitle" placeholder="Event title" />
+            <input id="eventCategory" placeholder="Category" />
+            <button id="addEventButton">Save note</button>
+          </div>
+          <textarea id="eventNotes" placeholder="Why this event might matter for ETF analysis"></textarea>
+        </div>
+      </section>
+
+      <section class="panel chart-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Comparison</p>
+            <h2>Normalized performance</h2>
+          </div>
+          <button id="resetZoomButton" class="secondary">Reset zoom</button>
+        </div>
+        <canvas id="performanceChart" height="120"></canvas>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Products</p>
+            <h2>ETF table</h2>
+          </div>
+          <span id="statusMessage" class="status">Ready</span>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Compare</th>
+                <th>Name</th>
+                <th>ISIN</th>
+                <th>TER</th>
+                <th>Fund size</th>
+                <th>Currency</th>
+                <th>Region</th>
+                <th>Distribution</th>
+                <th>Replication</th>
+                <th>1Y</th>
+                <th>3Y</th>
+                <th>5Y</th>
+                <th>Max drawdown</th>
+              </tr>
+            </thead>
+            <tbody id="productsBody"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="/static/app.js"></script>
+  </body>
+</html>
