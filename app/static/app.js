@@ -1,6 +1,7 @@
 const state = {
   products: [],
   selectedIsins: new Set(),
+  chartRefreshes: new Map(),
   chart: null,
 };
 
@@ -66,6 +67,10 @@ function formatInstrumentType(value) {
     crypto_etp: "Crypto & other ETP",
   };
   return labels[value] || value || "—";
+}
+
+function isEtfProduct(product) {
+  return product.instrument_type === "etf" || product.asset_class === "ETF";
 }
 
 function optionList(select, values, placeholder, emptyPlaceholder = "No values available yet", labelFormatter = (value) => value) {
@@ -169,10 +174,14 @@ function renderProducts(items, total) {
       <td class="number ${trendClass(product.return_5y)}">${formatPercent(product.return_5y)}</td>
       <td class="number ${trendClass(product.max_drawdown)}">${formatPercent(product.max_drawdown)}</td>
     `;
-    row.querySelector("input").addEventListener("change", (event) => {
-      if (event.target.checked) state.selectedIsins.add(product.isin);
-      else state.selectedIsins.delete(product.isin);
-      loadPerformance();
+    row.querySelector("input").addEventListener("change", async (event) => {
+      if (event.target.checked) {
+        state.selectedIsins.add(product.isin);
+        await refreshChartDataForProduct(product);
+      } else {
+        state.selectedIsins.delete(product.isin);
+        await loadPerformance();
+      }
     });
     elements.productsBody.append(row);
   });
@@ -211,7 +220,7 @@ async function loadPerformance() {
       state.chart = null;
     }
     elements.chartHelp.innerHTML =
-      "Select ETF rows in the table, then click <strong>Refresh selected charts</strong>. justETF chart data is available for ETFs, not individual stocks.";
+      "Select ETF rows in the table. The app will fetch justETF chart data automatically and redraw the comparison.";
     return;
   }
 
@@ -224,7 +233,7 @@ async function loadPerformance() {
       state.chart = null;
     }
     elements.chartHelp.innerHTML =
-      "No saved chart data for the selected instruments yet. Select ETFs and click <strong>Refresh selected charts</strong>; stocks and some ETPs are not available from justETF.";
+      "No saved chart data for the selected instruments yet. Chart data is fetched automatically for ETFs; stocks and some ETPs are not available from justETF.";
     return;
   }
 
@@ -279,6 +288,44 @@ async function loadPerformance() {
       },
     },
   });
+}
+
+async function refreshChartDataForProduct(product) {
+  if (!isEtfProduct(product)) {
+    elements.chartHelp.textContent = "Chart data is fetched automatically for ETFs. This selected instrument is not marked as an ETF.";
+    await loadPerformance();
+    return;
+  }
+
+  if (state.chartRefreshes.has(product.isin)) {
+    await state.chartRefreshes.get(product.isin);
+    return;
+  }
+
+  const label = product.neon_name || product.name || product.isin;
+  elements.chartHelp.textContent = `Fetching justETF chart data for ${label}…`;
+  setStatus(`Fetching chart data for ${product.isin}…`);
+
+  const refreshPromise = api("/api/sync/justetf/charts", {
+    method: "POST",
+    body: JSON.stringify({ isins: [product.isin], unclosed: false }),
+  })
+    .then(async (result) => {
+      setStatus(result.message || "Chart data refreshed");
+      await loadPerformance();
+    })
+    .catch(async (error) => {
+      setStatus(`Chart refresh failed: ${error.message}`);
+      elements.chartHelp.textContent =
+        "Could not fetch chart data for that instrument. It may not be available from justETF.";
+      await loadPerformance();
+    })
+    .finally(() => {
+      state.chartRefreshes.delete(product.isin);
+    });
+
+  state.chartRefreshes.set(product.isin, refreshPromise);
+  await refreshPromise;
 }
 
 function parseIsins(rawText) {
@@ -344,20 +391,6 @@ document.querySelector("#refreshProfilesButton").addEventListener("click", (even
       body: JSON.stringify({ isins: Array.from(state.selectedIsins) }),
     }),
   ),
-);
-
-document.querySelector("#refreshChartsButton").addEventListener("click", (event) =>
-  runBusy(event.currentTarget, "Refreshing charts…", async () => {
-    if (!state.selectedIsins.size) {
-      return { message: "Select one or more products before refreshing charts." };
-    }
-    const result = await api("/api/sync/justetf/charts", {
-      method: "POST",
-      body: JSON.stringify({ isins: Array.from(state.selectedIsins), unclosed: false }),
-    });
-    await loadPerformance();
-    return result;
-  }),
 );
 
 document.querySelector("#addIsinsButton").addEventListener("click", (event) =>
