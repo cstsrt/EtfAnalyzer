@@ -138,27 +138,16 @@
               <span id="statusMessage" class="status">Ready</span>
             </div>
           </div>
+          <details class="column-drawer">
+            <summary>Columns</summary>
+            <div class="column-drawer-actions">
+              <button id="resetColumnsButton" class="secondary">Reset original view</button>
+            </div>
+            <div id="columnControls" class="column-controls"></div>
+          </details>
           <div class="table-wrap">
             <table>
-              <thead>
-                <tr>
-                  <th>Compare</th>
-                  <th>Type</th>
-                  <th>Name</th>
-                  <th>ISIN</th>
-                  <th>0% fee</th>
-                  <th>TER</th>
-                  <th>Fund size</th>
-                  <th>Currency</th>
-                  <th>Region</th>
-                  <th>Distribution</th>
-                  <th>Replication</th>
-                  <th>1Y</th>
-                  <th>3Y</th>
-                  <th>5Y</th>
-                  <th>Max drawdown</th>
-                </tr>
-              </thead>
+              <thead id="productsHead"></thead>
               <tbody id="productsBody"></tbody>
             </table>
           </div>

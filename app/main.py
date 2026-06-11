@@ -133,6 +133,8 @@ def health() -> dict[str, str]:
 def products(
     scope: Literal["neon", "all"] = "neon",
     search: str | None = None,
+    name_filter: str | None = None,
+    isin_filter: str | None = None,
     asset_class: str | None = None,
     region: str | None = None,
     currency: str | None = None,
@@ -143,23 +145,33 @@ def products(
     max_ter: float | None = None,
     min_fund_size: float | None = None,
     max_risk: float | None = None,
+    min_return_1y: float | None = None,
+    min_return_3y: float | None = None,
+    min_return_5y: float | None = None,
     sort: str = "name",
     direction: Literal["asc", "desc"] = "asc",
     limit: int = Query(250, ge=1, le=1000),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
-    allowed_sort_columns = {
-        "name",
-        "ter",
-        "fund_size_mn",
-        "return_1y",
-        "return_3y",
-        "return_5y",
-        "volatility_1y",
-        "max_drawdown",
-        "updated_at",
+    sort_expressions = {
+        "name": "COALESCE(offered_products.full_name, etfs.name, offered_products.neon_name)",
+        "isin": "etfs.isin",
+        "instrument_type": "offered_products.instrument_type",
+        "zero_fee": "offered_products.zero_fee",
+        "ter": "etfs.ter",
+        "fund_size_mn": "etfs.fund_size_mn",
+        "currency": "etfs.currency",
+        "region": "etfs.region",
+        "distribution_policy": "COALESCE(etfs.distribution_policy, offered_products.acc_dist)",
+        "replication": "etfs.replication",
+        "return_1y": "etfs.return_1y",
+        "return_3y": "etfs.return_3y",
+        "return_5y": "etfs.return_5y",
+        "volatility_1y": "etfs.volatility_1y",
+        "max_drawdown": "etfs.max_drawdown",
+        "updated_at": "etfs.updated_at",
     }
-    sort_column = sort if sort in allowed_sort_columns else "name"
+    sort_expression = sort_expressions.get(sort, sort_expressions["name"])
     where_clauses: list[str] = []
     values: list[Any] = []
 
@@ -177,6 +189,13 @@ def products(
         )
         search_value = f"%{search}%"
         values.extend([search_value, search_value, search_value, search_value, search_value])
+    if name_filter:
+        where_clauses.append("(etfs.name LIKE ? OR offered_products.neon_name LIKE ? OR offered_products.full_name LIKE ?)")
+        name_value = f"%{name_filter}%"
+        values.extend([name_value, name_value, name_value])
+    if isin_filter:
+        where_clauses.append("etfs.isin LIKE ?")
+        values.append(f"%{isin_filter}%")
     if asset_class:
         if asset_class in {"Stock", "ETF", "Crypto & other ETP"}:
             where_clauses.append(
@@ -219,6 +238,14 @@ def products(
     if max_risk is not None:
         where_clauses.append("etfs.risk_indicator <= ?")
         values.append(max_risk)
+    for column, value in {
+        "return_1y": min_return_1y,
+        "return_3y": min_return_3y,
+        "return_5y": min_return_5y,
+    }.items():
+        if value is not None:
+            where_clauses.append(f"etfs.{column} >= ?")
+            values.append(value)
 
     where_sql = f"WHERE {' AND '.join(where_clauses)}" if where_clauses else ""
     direction_sql = "DESC" if direction == "desc" else "ASC"
@@ -240,7 +267,7 @@ def products(
             FROM etfs
             LEFT JOIN offered_products ON offered_products.isin = etfs.isin
             {where_sql}
-            ORDER BY etfs.{sort_column} IS NULL, etfs.{sort_column} {direction_sql}
+            ORDER BY {sort_expression} IS NULL, {sort_expression} {direction_sql}
             LIMIT ? OFFSET ?
             """,
             [*values, limit, offset],
