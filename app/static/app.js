@@ -23,10 +23,7 @@ const elements = {
   sortInput: document.querySelector("#sortInput"),
   productsBody: document.querySelector("#productsBody"),
   manualIsins: document.querySelector("#manualIsins"),
-  eventDate: document.querySelector("#eventDate"),
-  eventTitle: document.querySelector("#eventTitle"),
-  eventCategory: document.querySelector("#eventCategory"),
-  eventNotes: document.querySelector("#eventNotes"),
+  chartHelp: document.querySelector("#chartHelp"),
 };
 
 function setStatus(message) {
@@ -187,14 +184,30 @@ async function loadPerformance() {
       state.chart.destroy();
       state.chart = null;
     }
+    elements.chartHelp.innerHTML =
+      "Select ETF rows in the table, then click <strong>Refresh selected charts</strong>. justETF chart data is available for ETFs, not individual stocks.";
     return;
   }
 
   const data = await api(`/api/performance?isins=${encodeURIComponent(isins.join(","))}&normalize=true`);
-  const labels = Array.from(
-    new Set(data.series.flatMap((series) => series.points.map((point) => point.date))),
-  ).sort();
-  const datasets = data.series.map((series, index) => {
+  const seriesWithPoints = data.series.filter((series) => series.points.length > 0);
+  const missingSeries = data.series.filter((series) => series.points.length === 0);
+  if (!seriesWithPoints.length) {
+    if (state.chart) {
+      state.chart.destroy();
+      state.chart = null;
+    }
+    elements.chartHelp.innerHTML =
+      "No saved chart data for the selected instruments yet. Select ETFs and click <strong>Refresh selected charts</strong>; stocks and some ETPs are not available from justETF.";
+    return;
+  }
+
+  elements.chartHelp.textContent = missingSeries.length
+    ? `Showing ${seriesWithPoints.length} product${seriesWithPoints.length === 1 ? "" : "s"}. ${missingSeries.length} selected instrument${missingSeries.length === 1 ? " has" : "s have"} no saved justETF chart data.`
+    : "Drag to pan, scroll/pinch to zoom. Values are normalized from each product’s first saved chart date.";
+
+  const labels = Array.from(new Set(seriesWithPoints.flatMap((series) => series.points.map((point) => point.date)))).sort();
+  const datasets = seriesWithPoints.map((series, index) => {
     const pointMap = new Map(series.points.map((point) => [point.date, point.value]));
     return {
       label: `${series.name || series.isin}`,
@@ -320,27 +333,8 @@ document.querySelector("#addIsinsButton").addEventListener("click", (event) =>
   ),
 );
 
-document.querySelector("#addEventButton").addEventListener("click", (event) =>
-  runBusy(event.currentTarget, "Saving event…", async () => {
-    await api("/api/events", {
-      method: "POST",
-      body: JSON.stringify({
-        event_date: elements.eventDate.value,
-        title: elements.eventTitle.value,
-        category: elements.eventCategory.value,
-        notes: elements.eventNotes.value,
-      }),
-    });
-    elements.eventTitle.value = "";
-    elements.eventCategory.value = "";
-    elements.eventNotes.value = "";
-    return { message: "Event saved" };
-  }),
-);
-
 document.querySelector("#resetZoomButton").addEventListener("click", () => {
   if (state.chart) state.chart.resetZoom();
 });
 
-elements.eventDate.valueAsDate = new Date();
 refreshAll().catch((error) => setStatus(`Error: ${error.message}`));

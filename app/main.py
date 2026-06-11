@@ -412,14 +412,27 @@ def sync_justetf_charts(payload: ChartSyncRequest) -> dict[str, Any]:
     unique_isins = sorted({isin.strip().upper() for isin in payload.isins if isin.strip()})
     try:
         records_count = 0
+        errors: dict[str, str] = {}
         for isin in unique_isins:
-            records = justetf_client.load_chart_records(isin, unclosed=payload.unclosed)
+            try:
+                records = justetf_client.load_chart_records(isin, unclosed=payload.unclosed)
+            except Exception as exc:
+                errors[isin] = str(exc)
+                continue
             for record in records:
                 database.upsert_performance_point(isin, record)
             records_count += len(records)
-        message = f"Imported {records_count} chart points for {len(unique_isins)} ETFs."
-        database.finish_sync_run(run_id, "success", message, records_count)
-        return {"run_id": run_id, "message": message, "records": records_count}
+        if errors and records_count == 0:
+            status = "failed"
+            message = "No chart data imported. justETF chart data is usually only available for ETFs."
+        elif errors:
+            status = "partial"
+            message = f"Imported {records_count} chart points; {len(errors)} selected instruments had no justETF chart data."
+        else:
+            status = "success"
+            message = f"Imported {records_count} chart points for {len(unique_isins)} ETFs."
+        database.finish_sync_run(run_id, status, message, records_count)
+        return {"run_id": run_id, "message": message, "records": records_count, "errors": errors}
     except Exception as exc:
         database.finish_sync_run(run_id, "failed", str(exc), 0)
         raise HTTPException(status_code=502, detail=str(exc)) from exc

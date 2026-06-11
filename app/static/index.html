@@ -12,14 +12,6 @@
   <body>
     <main class="shell">
       <section class="hero">
-        <div>
-          <p class="eyebrow">neon Switzerland · ETF cockpit</p>
-          <h1>Compare neon investment products.</h1>
-          <p class="hero-copy">
-            Search the official neon investment universe, enrich ETFs with justETF data, compare
-            performance, and keep a clean export for deeper analysis.
-          </p>
-        </div>
         <div class="hero-card">
           <span class="hero-card-label">Database</span>
           <strong id="totalProducts">0 products</strong>
@@ -143,30 +135,11 @@
           <div class="actions stacked-actions">
             <button id="refreshOverviewButton" class="secondary">Refresh justETF overview</button>
             <button id="refreshProfilesButton" class="secondary">Refresh selected profiles</button>
-            <button id="refreshChartsButton" class="secondary">Refresh selected charts</button>
           </div>
           <p class="hint">
             Overview data fills filters like region, currency, TER, fund size, replication, and risk.
-            Profiles and charts enrich selected comparison products.
+            Profiles enrich selected ETF rows with deeper justETF metadata.
           </p>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Context</p>
-            <h2>Market event notes</h2>
-          </div>
-        </div>
-        <div class="event-note-grid">
-          <div class="event-form">
-            <input id="eventDate" type="date" />
-            <input id="eventTitle" placeholder="Event title" />
-            <input id="eventCategory" placeholder="Category" />
-            <button id="addEventButton">Save note</button>
-          </div>
-          <textarea id="eventNotes" placeholder="Why this event might matter for ETF analysis"></textarea>
         </div>
       </section>
 
@@ -176,8 +149,15 @@
             <p class="eyebrow">Comparison</p>
             <h2>Normalized performance</h2>
           </div>
-          <button id="resetZoomButton" class="secondary">Reset zoom</button>
+          <div class="actions chart-actions">
+            <button id="refreshChartsButton" class="secondary">Refresh selected charts</button>
+            <button id="resetZoomButton" class="secondary">Reset zoom</button>
+          </div>
         </div>
+        <p id="chartHelp" class="chart-help">
+          Select ETF rows in the table, then click <strong>Refresh selected charts</strong>. justETF
+          chart data is available for ETFs, not individual stocks.
+        </p>
         <canvas id="performanceChart" height="120"></canvas>
       </section>
 
