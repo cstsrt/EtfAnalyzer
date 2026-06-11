@@ -7,6 +7,8 @@ services:
     environment:
       ETF_ANALYZER_DB: /data/etf_analyzer.sqlite3
       NEON_INVEST_URLS: "https://www.neon-free.ch/en/invest/"
+      NEON_INSTRUMENT_LIST_URL: "https://static-assets.neon-free.ch/trading/asset-list/neon_invest_stocks_etfs.pdf"
+      NEON_PRELOAD_INSTRUMENTS: "1"
     volumes:
       - ./data:/data
     restart: unless-stopped

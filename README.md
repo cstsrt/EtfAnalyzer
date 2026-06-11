@@ -7,6 +7,7 @@ It stores ETF metadata and performance history in SQLite, uses `justetf-scraping
 ## What It Does
 
 - Track neon investment products by ISIN.
+- Preload and refresh neon's official published instrument universe.
 - Refresh ETF overview/profile/chart data from justETF.
 - Filter by fees, fund size, region, asset class, currency, replication, distribution policy, volatility, drawdown, and return figures.
 - Compare selected ETFs in a zoomable normalized performance chart.
@@ -33,11 +34,12 @@ http://<mac-mini-tailscale-name-or-ip>:3002
 
 ## Typical Workflow
 
-1. Add neon ETF ISINs manually in the app, or try the neon page scanner.
-2. Click `Refresh justETF overview`.
-3. Select ETFs and click `Refresh selected charts`.
-4. Filter and compare products.
-5. Export the JSON analysis pack when you want ChatGPT to reason over the saved data.
+1. Start the app. On an empty database, it preloads neon's official instrument list automatically.
+2. Click `Refresh neon list` whenever you want to reload neon's latest published list.
+3. Click `Refresh justETF overview`.
+4. Select ETFs and click `Refresh selected profiles` or `Refresh selected charts`.
+5. Filter and compare products.
+6. Export the JSON analysis pack when you want ChatGPT to reason over the saved data.
 
 ## Notes About Scraping
 
@@ -47,7 +49,15 @@ The app wraps [`druzsan/justetf-scraping`](https://github.com/druzsan/justetf-sc
 - `load_chart(isin)` for historical chart data.
 - `get_etf_overview(isin)` for ETF profile/allocation data.
 
-The neon product scanner is intentionally conservative: it extracts ISIN-looking codes from public neon investment pages if they are present in page text. If neon does not expose a clean ETF list publicly, add ISINs manually in the app and then use justETF refreshes.
+The neon list importer uses neon's official public PDF:
+
+```text
+https://static-assets.neon-free.ch/trading/asset-list/neon_invest_stocks_etfs.pdf
+```
+
+It currently parses stocks, ETFs, and crypto/other ETPs, including ISIN, neon display name, full product name where available, accumulation/distribution status, and 0%-fee eligibility.
+
+The older neon page scanner remains available as a fallback: it extracts ISIN-looking codes from configured public pages.
 
 ## Data Files
 

@@ -5,4 +5,5 @@ beautifulsoup4==4.12.3
 pandas==2.2.3
 numpy==2.2.1
 python-dateutil==2.9.0.post0
+pypdf==5.1.0
 git+https://github.com/druzsan/justetf-scraping.git

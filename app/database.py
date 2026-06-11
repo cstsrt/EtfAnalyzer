@@ -93,6 +93,11 @@ def init_db() -> None:
             CREATE TABLE IF NOT EXISTS offered_products (
                 isin TEXT PRIMARY KEY,
                 source TEXT NOT NULL DEFAULT 'neon',
+                instrument_type TEXT,
+                neon_name TEXT,
+                full_name TEXT,
+                acc_dist TEXT,
+                zero_fee INTEGER,
                 source_name TEXT,
                 source_url TEXT,
                 notes TEXT,
@@ -142,6 +147,20 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_performance_isin_date ON performance_points(isin, date);
             """
         )
+        ensure_column(connection, "offered_products", "instrument_type", "TEXT")
+        ensure_column(connection, "offered_products", "neon_name", "TEXT")
+        ensure_column(connection, "offered_products", "full_name", "TEXT")
+        ensure_column(connection, "offered_products", "acc_dist", "TEXT")
+        ensure_column(connection, "offered_products", "zero_fee", "INTEGER")
+        connection.execute(
+            "CREATE INDEX IF NOT EXISTS idx_offered_products_type ON offered_products(instrument_type, zero_fee)"
+        )
+
+
+def ensure_column(connection: sqlite3.Connection, table: str, column: str, definition: str) -> None:
+    columns = {row["name"] for row in connection.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        connection.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
 
 
 def row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -253,29 +272,72 @@ def upsert_etf(record: dict[str, Any]) -> None:
         )
 
 
-def upsert_offered_product(isin: str, source_name: str | None = None, source_url: str | None = None, notes: str | None = None) -> None:
+def upsert_offered_product(
+    isin: str,
+    source_name: str | None = None,
+    source_url: str | None = None,
+    notes: str | None = None,
+    instrument_type: str | None = None,
+    neon_name: str | None = None,
+    full_name: str | None = None,
+    acc_dist: str | None = None,
+    zero_fee: bool | None = None,
+) -> None:
     normalized_isin = isin.strip().upper()
     now = utc_now()
+    display_name = full_name or neon_name or source_name or normalized_isin
     with connect() as connection:
         connection.execute(
             """
             INSERT OR IGNORE INTO etfs (isin, name, raw_json, updated_at)
             VALUES (?, ?, '{}', ?)
             """,
-            (normalized_isin, source_name or normalized_isin, now),
+            (normalized_isin, display_name, now),
         )
         connection.execute(
             """
-            INSERT INTO offered_products (isin, source, source_name, source_url, notes, is_active, created_at, updated_at)
-            VALUES (?, 'neon', ?, ?, ?, 1, ?, ?)
+            UPDATE etfs
+            SET name = CASE
+                    WHEN name IS NULL OR name = isin THEN ?
+                    ELSE name
+                END,
+                updated_at = ?
+            WHERE isin = ?
+            """,
+            (display_name, now, normalized_isin),
+        )
+        connection.execute(
+            """
+            INSERT INTO offered_products (
+                isin, source, instrument_type, neon_name, full_name, acc_dist, zero_fee,
+                source_name, source_url, notes, is_active, created_at, updated_at
+            )
+            VALUES (?, 'neon', ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
             ON CONFLICT(isin) DO UPDATE SET
+                instrument_type = COALESCE(excluded.instrument_type, offered_products.instrument_type),
+                neon_name = COALESCE(excluded.neon_name, offered_products.neon_name),
+                full_name = COALESCE(excluded.full_name, offered_products.full_name),
+                acc_dist = COALESCE(excluded.acc_dist, offered_products.acc_dist),
+                zero_fee = COALESCE(excluded.zero_fee, offered_products.zero_fee),
                 source_name = COALESCE(excluded.source_name, offered_products.source_name),
                 source_url = COALESCE(excluded.source_url, offered_products.source_url),
                 notes = COALESCE(excluded.notes, offered_products.notes),
                 is_active = 1,
                 updated_at = excluded.updated_at
             """,
-            (normalized_isin, source_name, source_url, notes, now, now),
+            (
+                normalized_isin,
+                instrument_type,
+                neon_name,
+                full_name,
+                acc_dist,
+                int(zero_fee) if zero_fee is not None else None,
+                source_name,
+                source_url,
+                notes,
+                now,
+                now,
+            ),
         )
 
 

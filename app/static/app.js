@@ -15,6 +15,8 @@ const elements = {
   currencyInput: document.querySelector("#currencyInput"),
   distributionInput: document.querySelector("#distributionInput"),
   replicationInput: document.querySelector("#replicationInput"),
+  instrumentTypeInput: document.querySelector("#instrumentTypeInput"),
+  zeroFeeInput: document.querySelector("#zeroFeeInput"),
   maxTerInput: document.querySelector("#maxTerInput"),
   minFundSizeInput: document.querySelector("#minFundSizeInput"),
   maxRiskInput: document.querySelector("#maxRiskInput"),
@@ -78,6 +80,7 @@ async function loadFilters() {
   optionList(elements.currencyInput, filters.currency || [], "Any currency");
   optionList(elements.distributionInput, filters.distribution_policy || [], "Any distribution");
   optionList(elements.replicationInput, filters.replication || [], "Any replication");
+  optionList(elements.instrumentTypeInput, filters.instrument_type || [], "Any neon type");
 }
 
 function buildProductQuery() {
@@ -93,6 +96,8 @@ function buildProductQuery() {
     ["currency", elements.currencyInput.value],
     ["distribution_policy", elements.distributionInput.value],
     ["replication", elements.replicationInput.value],
+    ["instrument_type", elements.instrumentTypeInput.value],
+    ["zero_fee", elements.zeroFeeInput.value],
     ["max_ter", elements.maxTerInput.value],
     ["min_fund_size", elements.minFundSizeInput.value],
     ["max_risk", elements.maxRiskInput.value],
@@ -110,7 +115,7 @@ function renderProducts(items, total) {
 
   if (!items.length) {
     const row = document.createElement("tr");
-    row.innerHTML = `<td colspan="13">No products yet. Add neon ISINs or refresh data — the database goblin is hungry.</td>`;
+    row.innerHTML = `<td colspan="15">No products yet. Add neon ISINs or refresh the official neon list — the database goblin is hungry.</td>`;
     elements.productsBody.append(row);
     return;
   }
@@ -120,8 +125,10 @@ function renderProducts(items, total) {
     const checked = state.selectedIsins.has(product.isin) ? "checked" : "";
     row.innerHTML = `
       <td><input type="checkbox" data-isin="${product.isin}" ${checked} /></td>
-      <td class="name-cell">${product.name || "Unnamed ETF"}</td>
+      <td>${product.instrument_type || "—"}</td>
+      <td class="name-cell">${product.full_name || product.name || product.neon_name || "Unnamed instrument"}</td>
       <td class="number">${product.isin}</td>
+      <td>${product.zero_fee === null || product.zero_fee === undefined ? "—" : product.zero_fee ? "✅" : "no"}</td>
       <td class="number">${formatPercent(product.ter)}</td>
       <td class="number">${formatNumber(product.fund_size_mn, " mn")}</td>
       <td>${product.currency || "—"}</td>
@@ -260,6 +267,12 @@ elements.searchInput.addEventListener("keydown", (event) => {
 document.querySelector("#scanNeonButton").addEventListener("click", (event) =>
   runBusy(event.currentTarget, "Scanning neon…", () =>
     api("/api/sync/neon", { method: "POST", body: JSON.stringify(null) }),
+  ),
+);
+
+document.querySelector("#refreshNeonInstrumentsButton").addEventListener("click", (event) =>
+  runBusy(event.currentTarget, "Refreshing neon list…", () =>
+    api("/api/sync/neon/instruments", { method: "POST", body: JSON.stringify({}) }),
   ),
 );
 

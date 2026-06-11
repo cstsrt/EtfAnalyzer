@@ -38,6 +38,10 @@ class EventRequest(BaseModel):
     notes: str | None = None
 
 
+class NeonInstrumentSyncRequest(BaseModel):
+    url: str | None = None
+
+
 def parse_json_column(value: str | None) -> Any:
     if not value:
         return None
@@ -58,6 +62,44 @@ def clean_product(row: dict[str, Any]) -> dict[str, Any]:
 @app.on_event("startup")
 def startup() -> None:
     database.init_db()
+    if should_preload_neon_instruments():
+        preload_neon_instruments()
+
+
+def should_preload_neon_instruments() -> bool:
+    import os
+
+    if os.getenv("NEON_PRELOAD_INSTRUMENTS", "0") not in {"1", "true", "yes"}:
+        return False
+    with database.connect() as connection:
+        count = connection.execute("SELECT COUNT(*) AS count FROM offered_products").fetchone()["count"]
+    return count == 0
+
+
+def preload_neon_instruments() -> None:
+    run_id = database.start_sync_run("neon-instruments-preload")
+    try:
+        instruments = neon_client.load_instrument_list()
+        for instrument in instruments:
+            database.upsert_offered_product(
+                instrument.isin,
+                source_name=instrument.neon_name,
+                source_url=instrument.source_url,
+                notes=f"Official neon instrument list {instrument.published_label or ''}".strip(),
+                instrument_type=instrument.instrument_type,
+                neon_name=instrument.neon_name,
+                full_name=instrument.full_name,
+                acc_dist=instrument.acc_dist,
+                zero_fee=instrument.zero_fee,
+            )
+        database.finish_sync_run(
+            run_id,
+            "success",
+            f"Preloaded {len(instruments)} instruments from neon's official list.",
+            len(instruments),
+        )
+    except Exception as exc:
+        database.finish_sync_run(run_id, "failed", str(exc), 0)
 
 
 @app.get("/api/health")
@@ -74,6 +116,8 @@ def products(
     currency: str | None = None,
     distribution_policy: str | None = None,
     replication: str | None = None,
+    instrument_type: str | None = None,
+    zero_fee: bool | None = None,
     max_ter: float | None = None,
     min_fund_size: float | None = None,
     max_risk: float | None = None,
@@ -99,6 +143,12 @@ def products(
 
     if scope == "neon":
         where_clauses.append("offered_products.is_active = 1")
+    if instrument_type:
+        where_clauses.append("offered_products.instrument_type = ?")
+        values.append(instrument_type)
+    if zero_fee is not None:
+        where_clauses.append("offered_products.zero_fee = ?")
+        values.append(int(zero_fee))
     if search:
         where_clauses.append("(etfs.name LIKE ? OR etfs.isin LIKE ? OR etfs.ticker LIKE ?)")
         search_value = f"%{search}%"
@@ -134,6 +184,11 @@ def products(
                 offered_products.source_name,
                 offered_products.source_url,
                 offered_products.notes,
+                offered_products.instrument_type,
+                offered_products.neon_name,
+                offered_products.full_name,
+                offered_products.acc_dist,
+                offered_products.zero_fee,
                 CASE WHEN offered_products.isin IS NULL THEN 0 ELSE 1 END AS is_neon_product
             FROM etfs
             LEFT JOIN offered_products ON offered_products.isin = etfs.isin
@@ -166,6 +221,10 @@ def filters(scope: Literal["neon", "all"] = "neon") -> dict[str, Any]:
                 f"SELECT DISTINCT etfs.{column} AS value FROM etfs {join_sql} WHERE etfs.{column} IS NOT NULL ORDER BY etfs.{column}"
             ).fetchall()
             result[column] = [row["value"] for row in rows]
+        instrument_rows = connection.execute(
+            f"SELECT DISTINCT offered_products.instrument_type AS value FROM offered_products {'WHERE offered_products.is_active = 1' if scope == 'neon' else ''} ORDER BY offered_products.instrument_type"
+        ).fetchall()
+        result["instrument_type"] = [row["value"] for row in instrument_rows if row["value"]]
         ranges = connection.execute(
             f"""
             SELECT
@@ -200,6 +259,39 @@ def sync_neon(urls: list[str] | None = Body(default=None)) -> dict[str, Any]:
         message = f"Found {len(candidates)} ISIN candidates on neon pages."
         database.finish_sync_run(run_id, "success", message, len(candidates))
         return {"run_id": run_id, "message": message, "items": [candidate.__dict__ for candidate in candidates]}
+    except Exception as exc:
+        database.finish_sync_run(run_id, "failed", str(exc), 0)
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+
+
+@app.post("/api/sync/neon/instruments")
+def sync_neon_instruments(payload: NeonInstrumentSyncRequest | None = None) -> dict[str, Any]:
+    run_id = database.start_sync_run("neon-instruments")
+    try:
+        instruments = neon_client.load_instrument_list(payload.url if payload else None)
+        for instrument in instruments:
+            database.upsert_offered_product(
+                instrument.isin,
+                source_name=instrument.neon_name,
+                source_url=instrument.source_url,
+                notes=f"Official neon instrument list {instrument.published_label or ''}".strip(),
+                instrument_type=instrument.instrument_type,
+                neon_name=instrument.neon_name,
+                full_name=instrument.full_name,
+                acc_dist=instrument.acc_dist,
+                zero_fee=instrument.zero_fee,
+            )
+        message = f"Imported {len(instruments)} instruments from neon's official list."
+        database.finish_sync_run(run_id, "success", message, len(instruments))
+        return {
+            "run_id": run_id,
+            "message": message,
+            "records": len(instruments),
+            "counts": {
+                instrument_type: sum(1 for instrument in instruments if instrument.instrument_type == instrument_type)
+                for instrument_type in sorted({instrument.instrument_type for instrument in instruments})
+            },
+        }
     except Exception as exc:
         database.finish_sync_run(run_id, "failed", str(exc), 0)
         raise HTTPException(status_code=502, detail=str(exc)) from exc
@@ -346,6 +438,11 @@ def export_snapshot() -> dict[str, Any]:
                 offered_products.source_name,
                 offered_products.source_url,
                 offered_products.notes,
+                offered_products.instrument_type,
+                offered_products.neon_name,
+                offered_products.full_name,
+                offered_products.acc_dist,
+                offered_products.zero_fee,
                 CASE WHEN offered_products.isin IS NULL THEN 0 ELSE 1 END AS is_neon_product
             FROM etfs
             LEFT JOIN offered_products ON offered_products.isin = etfs.isin
