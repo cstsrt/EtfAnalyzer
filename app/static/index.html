@@ -10,9 +10,13 @@
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
   </head>
   <body>
-    <main class="shell">
-      <section class="hero">
-        <div class="hero-card">
+    <main class="shell dashboard-shell">
+      <section class="topbar panel">
+        <div>
+          <p class="eyebrow">neon ETF Analyzer</p>
+          <h1>Investment cockpit</h1>
+        </div>
+        <div class="topbar-stats">
           <span class="hero-card-label">Database</span>
           <strong id="totalProducts">0 products</strong>
           <span id="lastSync">No sync yet</span>
@@ -101,101 +105,91 @@
           <button id="clearFiltersButton" class="secondary">Clear filters</button>
           <a class="button ghost" href="/api/export/snapshot" target="_blank" rel="noreferrer">Export JSON</a>
         </div>
-      </section>
 
-      <section class="split">
-        <div class="panel">
-          <div class="panel-heading">
+        <details class="utility-drawer">
+          <summary>Data and list tools</summary>
+          <div class="utility-grid">
             <div>
-              <p class="eyebrow">Personal list</p>
-              <h2>Manage neon products</h2>
+              <h3>Manage neon products</h3>
+              <div class="actions stacked-actions">
+                <button id="refreshNeonInstrumentsButton" class="secondary">Refresh official neon list</button>
+                <button id="scanNeonButton" class="secondary">Scan neon pages</button>
+              </div>
+              <div class="manual-add compact-manual-add">
+                <textarea id="manualIsins" placeholder="Paste ISINs, separated by commas or spaces"></textarea>
+                <button id="addIsinsButton">Add products</button>
+              </div>
+            </div>
+            <div>
+              <h3>Refresh ETF data</h3>
+              <div class="actions stacked-actions">
+                <button id="refreshOverviewButton" class="secondary">Refresh justETF overview</button>
+                <button id="refreshProfilesButton" class="secondary">Refresh selected profiles</button>
+              </div>
+              <p class="hint">
+                Overview fills filters like region, currency, TER, fund size, replication, and risk.
+              </p>
             </div>
           </div>
-          <div class="actions stacked-actions">
-            <button id="refreshNeonInstrumentsButton" class="secondary">Refresh official neon list</button>
-            <button id="scanNeonButton" class="secondary">Scan neon pages</button>
-          </div>
-          <div class="section-divider"></div>
-          <h3>Add instruments manually</h3>
-          <div class="manual-add">
-            <textarea id="manualIsins" placeholder="Paste ISINs, separated by commas or spaces"></textarea>
-            <button id="addIsinsButton">Add products</button>
-          </div>
-          <p class="hint">
-            Use this for instruments you want to track even if they are not in the official neon list.
-          </p>
-        </div>
+        </details>
+      </section>
 
-        <div class="panel">
+      <section class="workspace-grid">
+        <section class="panel products-panel">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">Data enrichment</p>
-              <h2>Refresh ETF data</h2>
+              <p class="eyebrow">Products</p>
+              <h2>Search results</h2>
+            </div>
+            <div class="status-group">
+              <span id="shownProducts" class="status">Showing 0 products</span>
+              <span id="statusMessage" class="status">Ready</span>
             </div>
           </div>
-          <div class="actions stacked-actions">
-            <button id="refreshOverviewButton" class="secondary">Refresh justETF overview</button>
-            <button id="refreshProfilesButton" class="secondary">Refresh selected profiles</button>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Compare</th>
+                  <th>Type</th>
+                  <th>Name</th>
+                  <th>ISIN</th>
+                  <th>0% fee</th>
+                  <th>TER</th>
+                  <th>Fund size</th>
+                  <th>Currency</th>
+                  <th>Region</th>
+                  <th>Distribution</th>
+                  <th>Replication</th>
+                  <th>1Y</th>
+                  <th>3Y</th>
+                  <th>5Y</th>
+                  <th>Max drawdown</th>
+                </tr>
+              </thead>
+              <tbody id="productsBody"></tbody>
+            </table>
           </div>
-          <p class="hint">
-            Overview data fills filters like region, currency, TER, fund size, replication, and risk.
-            Profiles enrich selected ETF rows with deeper justETF metadata.
+        </section>
+
+        <section class="panel chart-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Comparison</p>
+              <h2>Normalized performance</h2>
+            </div>
+            <div class="actions chart-actions">
+              <button id="resetZoomButton" class="secondary">Reset zoom</button>
+            </div>
+          </div>
+          <p id="chartHelp" class="chart-help">
+            Select ETF rows in the table. The app will fetch justETF chart data automatically and
+            redraw the comparison.
           </p>
-        </div>
-      </section>
-
-      <section class="panel chart-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Comparison</p>
-            <h2>Normalized performance</h2>
+          <div class="chart-canvas-wrap">
+            <canvas id="performanceChart"></canvas>
           </div>
-          <div class="actions chart-actions">
-            <button id="resetZoomButton" class="secondary">Reset zoom</button>
-          </div>
-        </div>
-        <p id="chartHelp" class="chart-help">
-          Select ETF rows in the table. The app will fetch justETF chart data automatically and
-          redraw the comparison.
-        </p>
-        <canvas id="performanceChart" height="120"></canvas>
-      </section>
-
-      <section class="panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Products</p>
-            <h2>ETF table</h2>
-          </div>
-          <div class="status-group">
-            <span id="shownProducts" class="status">Showing 0 products</span>
-            <span id="statusMessage" class="status">Ready</span>
-          </div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>Compare</th>
-                <th>Type</th>
-                <th>Name</th>
-                <th>ISIN</th>
-                <th>0% fee</th>
-                <th>TER</th>
-                <th>Fund size</th>
-                <th>Currency</th>
-                <th>Region</th>
-                <th>Distribution</th>
-                <th>Replication</th>
-                <th>1Y</th>
-                <th>3Y</th>
-                <th>5Y</th>
-                <th>Max drawdown</th>
-              </tr>
-            </thead>
-            <tbody id="productsBody"></tbody>
-          </table>
-        </div>
+        </section>
       </section>
     </main>
     <script src="/static/app.js"></script>
