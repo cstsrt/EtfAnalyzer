@@ -22,13 +22,13 @@ docker compose up --build
 Then open:
 
 ```text
-http://localhost:8080
+http://localhost:3002
 ```
 
 On your Mac mini over Tailscale, use:
 
 ```text
-http://<mac-mini-tailscale-name-or-ip>:8080
+http://<mac-mini-tailscale-name-or-ip>:3002
 ```
 
 ## Typical Workflow
