@@ -56,7 +56,29 @@ def clean_product(row: dict[str, Any]) -> dict[str, Any]:
     for key in ("countries_json", "sectors_json", "holdings_json", "raw_json"):
         cleaned[key.replace("_json", "")] = parse_json_column(cleaned.pop(key, None))
     cleaned["is_neon_product"] = bool(cleaned.get("is_neon_product"))
+    if not cleaned.get("asset_class") and cleaned.get("instrument_type"):
+        cleaned["asset_class"] = instrument_type_label(cleaned["instrument_type"])
+    if not cleaned.get("distribution_policy") and cleaned.get("acc_dist"):
+        cleaned["distribution_policy"] = acc_dist_label(cleaned["acc_dist"])
     return cleaned
+
+
+def instrument_type_label(value: str | None) -> str | None:
+    labels = {
+        "stock": "Stock",
+        "etf": "ETF",
+        "crypto_etp": "Crypto & other ETP",
+    }
+    return labels.get(value or "", value)
+
+
+def acc_dist_label(value: str | None) -> str | None:
+    labels = {
+        "acc.": "Accumulating",
+        "dist.": "Distributing",
+        "n/a": "n/a",
+    }
+    return labels.get(value or "", value)
 
 
 @app.on_event("startup")
@@ -150,16 +172,40 @@ def products(
         where_clauses.append("offered_products.zero_fee = ?")
         values.append(int(zero_fee))
     if search:
-        where_clauses.append("(etfs.name LIKE ? OR etfs.isin LIKE ? OR etfs.ticker LIKE ?)")
+        where_clauses.append(
+            "(etfs.name LIKE ? OR etfs.isin LIKE ? OR etfs.ticker LIKE ? OR offered_products.neon_name LIKE ? OR offered_products.full_name LIKE ?)"
+        )
         search_value = f"%{search}%"
-        values.extend([search_value, search_value, search_value])
-    for column, value in {
-        "asset_class": asset_class,
-        "region": region,
-        "currency": currency,
-        "distribution_policy": distribution_policy,
-        "replication": replication,
-    }.items():
+        values.extend([search_value, search_value, search_value, search_value, search_value])
+    if asset_class:
+        where_clauses.append(
+            """
+            COALESCE(
+                etfs.asset_class,
+                CASE offered_products.instrument_type
+                    WHEN 'stock' THEN 'Stock'
+                    WHEN 'etf' THEN 'ETF'
+                    WHEN 'crypto_etp' THEN 'Crypto & other ETP'
+                END
+            ) = ?
+            """
+        )
+        values.append(asset_class)
+    if distribution_policy:
+        where_clauses.append(
+            """
+            COALESCE(
+                etfs.distribution_policy,
+                CASE offered_products.acc_dist
+                    WHEN 'acc.' THEN 'Accumulating'
+                    WHEN 'dist.' THEN 'Distributing'
+                    ELSE offered_products.acc_dist
+                END
+            ) = ?
+            """
+        )
+        values.append(distribution_policy)
+    for column, value in {"region": region, "currency": currency, "replication": replication}.items():
         if value:
             where_clauses.append(f"etfs.{column} = ?")
             values.append(value)
@@ -213,16 +259,52 @@ def products(
 
 @app.get("/api/filters")
 def filters(scope: Literal["neon", "all"] = "neon") -> dict[str, Any]:
-    join_sql = "JOIN offered_products ON offered_products.isin = etfs.isin AND offered_products.is_active = 1" if scope == "neon" else ""
+    from_sql = "FROM etfs LEFT JOIN offered_products ON offered_products.isin = etfs.isin"
+    where_sql = "WHERE offered_products.is_active = 1" if scope == "neon" else ""
+    expressions = {
+        "asset_class": """
+            COALESCE(
+                etfs.asset_class,
+                CASE offered_products.instrument_type
+                    WHEN 'stock' THEN 'Stock'
+                    WHEN 'etf' THEN 'ETF'
+                    WHEN 'crypto_etp' THEN 'Crypto & other ETP'
+                END
+            )
+        """,
+        "region": "etfs.region",
+        "currency": "etfs.currency",
+        "distribution_policy": """
+            COALESCE(
+                etfs.distribution_policy,
+                CASE offered_products.acc_dist
+                    WHEN 'acc.' THEN 'Accumulating'
+                    WHEN 'dist.' THEN 'Distributing'
+                    ELSE offered_products.acc_dist
+                END
+            )
+        """,
+        "replication": "etfs.replication",
+    }
     with database.connect() as connection:
         result: dict[str, Any] = {}
-        for column in ("asset_class", "region", "currency", "distribution_policy", "replication"):
+        for column, expression in expressions.items():
             rows = connection.execute(
-                f"SELECT DISTINCT etfs.{column} AS value FROM etfs {join_sql} WHERE etfs.{column} IS NOT NULL ORDER BY etfs.{column}"
+                f"""
+                SELECT DISTINCT {expression} AS value
+                {from_sql}
+                {where_sql}
+                ORDER BY value
+                """
             ).fetchall()
-            result[column] = [row["value"] for row in rows]
+            result[column] = [row["value"] for row in rows if row["value"]]
         instrument_rows = connection.execute(
-            f"SELECT DISTINCT offered_products.instrument_type AS value FROM offered_products {'WHERE offered_products.is_active = 1' if scope == 'neon' else ''} ORDER BY offered_products.instrument_type"
+            f"""
+            SELECT DISTINCT offered_products.instrument_type AS value
+            FROM offered_products
+            {'WHERE offered_products.is_active = 1' if scope == 'neon' else ''}
+            ORDER BY offered_products.instrument_type
+            """
         ).fetchall()
         result["instrument_type"] = [row["value"] for row in instrument_rows if row["value"]]
         ranges = connection.execute(
@@ -234,7 +316,8 @@ def filters(scope: Literal["neon", "all"] = "neon") -> dict[str, Any]:
                 MAX(fund_size_mn) AS max_fund_size,
                 MIN(risk_indicator) AS min_risk,
                 MAX(risk_indicator) AS max_risk
-            FROM etfs {join_sql}
+            {from_sql}
+            {where_sql}
             """
         ).fetchone()
         result["ranges"] = database.row_to_dict(ranges)

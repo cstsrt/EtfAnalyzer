@@ -61,26 +61,37 @@ function trendClass(value) {
   return numericValue > 0 ? "positive" : "negative";
 }
 
-function optionList(select, values, placeholder) {
+function formatInstrumentType(value) {
+  const labels = {
+    stock: "Stock",
+    etf: "ETF",
+    crypto_etp: "Crypto & other ETP",
+  };
+  return labels[value] || value || "—";
+}
+
+function optionList(select, values, placeholder, emptyPlaceholder = "No values available yet", labelFormatter = (value) => value) {
   const currentValue = select.value;
-  select.innerHTML = `<option value="">${placeholder}</option>`;
+  const normalizedValues = values.filter(Boolean);
+  select.innerHTML = `<option value="">${normalizedValues.length ? placeholder : emptyPlaceholder}</option>`;
+  select.disabled = normalizedValues.length === 0;
   values.forEach((value) => {
     const option = document.createElement("option");
     option.value = value;
-    option.textContent = value;
+    option.textContent = labelFormatter(value);
     select.append(option);
   });
-  select.value = currentValue;
+  select.value = normalizedValues.includes(currentValue) ? currentValue : "";
 }
 
 async function loadFilters() {
   const filters = await api(`/api/filters?scope=${elements.scopeInput.value}`);
   optionList(elements.assetClassInput, filters.asset_class || [], "Any asset class");
-  optionList(elements.regionInput, filters.region || [], "Any region");
-  optionList(elements.currencyInput, filters.currency || [], "Any currency");
+  optionList(elements.regionInput, filters.region || [], "Any region", "Refresh justETF overview first");
+  optionList(elements.currencyInput, filters.currency || [], "Any currency", "Refresh justETF overview first");
   optionList(elements.distributionInput, filters.distribution_policy || [], "Any distribution");
-  optionList(elements.replicationInput, filters.replication || [], "Any replication");
-  optionList(elements.instrumentTypeInput, filters.instrument_type || [], "Any neon type");
+  optionList(elements.replicationInput, filters.replication || [], "Any replication", "Refresh justETF overview first");
+  optionList(elements.instrumentTypeInput, filters.instrument_type || [], "Any neon type", "No neon types found", formatInstrumentType);
 }
 
 function buildProductQuery() {
@@ -125,7 +136,7 @@ function renderProducts(items, total) {
     const checked = state.selectedIsins.has(product.isin) ? "checked" : "";
     row.innerHTML = `
       <td><input type="checkbox" data-isin="${product.isin}" ${checked} /></td>
-      <td>${product.instrument_type || "—"}</td>
+      <td>${formatInstrumentType(product.instrument_type)}</td>
       <td class="name-cell">${product.full_name || product.name || product.neon_name || "Unnamed instrument"}</td>
       <td class="number">${product.isin}</td>
       <td>${product.zero_fee === null || product.zero_fee === undefined ? "—" : product.zero_fee ? "✅" : "no"}</td>

@@ -14,10 +14,10 @@
       <section class="hero">
         <div>
           <p class="eyebrow">neon Switzerland · ETF cockpit</p>
-          <h1>Choose investments with calmer numbers.</h1>
+          <h1>Compare neon investment products.</h1>
           <p class="hero-copy">
-            Track neon investment products, enrich them from justETF, compare history, and export
-            a clean data pack for deeper analysis.
+            Search the official neon investment universe, enrich ETFs with justETF data, compare
+            performance, and keep a clean export for deeper analysis.
           </p>
         </div>
         <div class="hero-card">
@@ -28,6 +28,13 @@
       </section>
 
       <section class="panel control-panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Search</p>
+            <h2>Find and filter products</h2>
+          </div>
+          <span class="hint">Some market-data filters appear after justETF enrichment.</span>
+        </div>
         <div class="control-grid">
           <label>
             Search
@@ -99,11 +106,6 @@
         </div>
         <div class="actions">
           <button id="applyFiltersButton">Apply filters</button>
-          <button id="refreshNeonInstrumentsButton" class="secondary">Refresh neon list</button>
-          <button id="scanNeonButton" class="secondary">Scan neon pages</button>
-          <button id="refreshOverviewButton" class="secondary">Refresh justETF overview</button>
-          <button id="refreshProfilesButton" class="secondary">Refresh selected profiles</button>
-          <button id="refreshChartsButton" class="secondary">Refresh selected charts</button>
           <a class="button ghost" href="/api/export/snapshot" target="_blank" rel="noreferrer">Export JSON</a>
         </div>
       </section>
@@ -112,27 +114,52 @@
         <div class="panel">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">Manual seed</p>
-              <h2>Add neon ETF ISINs</h2>
+              <p class="eyebrow">Personal list</p>
+              <h2>Manage neon products</h2>
             </div>
           </div>
+          <div class="actions stacked-actions">
+            <button id="refreshNeonInstrumentsButton" class="secondary">Refresh official neon list</button>
+            <button id="scanNeonButton" class="secondary">Scan neon pages</button>
+          </div>
+          <div class="section-divider"></div>
+          <h3>Add instruments manually</h3>
           <div class="manual-add">
             <textarea id="manualIsins" placeholder="Paste ISINs, separated by commas or spaces"></textarea>
             <button id="addIsinsButton">Add products</button>
           </div>
           <p class="hint">
-            If neon does not expose a machine-readable product list, this is the reliable path:
-            add ISINs once, then refresh justETF data.
+            Use this for instruments you want to track even if they are not in the official neon list.
           </p>
         </div>
 
         <div class="panel">
           <div class="panel-heading">
             <div>
-              <p class="eyebrow">Context</p>
-              <h2>Market event notes</h2>
+              <p class="eyebrow">Data enrichment</p>
+              <h2>Refresh ETF data</h2>
             </div>
           </div>
+          <div class="actions stacked-actions">
+            <button id="refreshOverviewButton" class="secondary">Refresh justETF overview</button>
+            <button id="refreshProfilesButton" class="secondary">Refresh selected profiles</button>
+            <button id="refreshChartsButton" class="secondary">Refresh selected charts</button>
+          </div>
+          <p class="hint">
+            Overview data fills filters like region, currency, TER, fund size, replication, and risk.
+            Profiles and charts enrich selected comparison products.
+          </p>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-heading">
+          <div>
+            <p class="eyebrow">Context</p>
+            <h2>Market event notes</h2>
+          </div>
+        </div>
+        <div class="event-note-grid">
           <div class="event-form">
             <input id="eventDate" type="date" />
             <input id="eventTitle" placeholder="Event title" />
