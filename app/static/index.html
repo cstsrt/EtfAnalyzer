@@ -98,6 +98,7 @@
         </div>
         <div class="actions">
           <button id="applyFiltersButton">Apply filters</button>
+          <button id="clearFiltersButton" class="secondary">Clear filters</button>
           <a class="button ghost" href="/api/export/snapshot" target="_blank" rel="noreferrer">Export JSON</a>
         </div>
       </section>
@@ -167,7 +168,10 @@
             <p class="eyebrow">Products</p>
             <h2>ETF table</h2>
           </div>
-          <span id="statusMessage" class="status">Ready</span>
+          <div class="status-group">
+            <span id="shownProducts" class="status">Showing 0 products</span>
+            <span id="statusMessage" class="status">Ready</span>
+          </div>
         </div>
         <div class="table-wrap">
           <table>

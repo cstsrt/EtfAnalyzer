@@ -116,6 +116,13 @@ body {
   letter-spacing: -0.04em;
 }
 
+.status-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .control-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(160px, 1fr));

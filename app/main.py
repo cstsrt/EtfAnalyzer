@@ -178,19 +178,20 @@ def products(
         search_value = f"%{search}%"
         values.extend([search_value, search_value, search_value, search_value, search_value])
     if asset_class:
-        where_clauses.append(
-            """
-            COALESCE(
-                etfs.asset_class,
+        if asset_class in {"Stock", "ETF", "Crypto & other ETP"}:
+            where_clauses.append(
+                """
                 CASE offered_products.instrument_type
                     WHEN 'stock' THEN 'Stock'
                     WHEN 'etf' THEN 'ETF'
                     WHEN 'crypto_etp' THEN 'Crypto & other ETP'
-                END
-            ) = ?
-            """
-        )
-        values.append(asset_class)
+                END = ?
+                """
+            )
+            values.append(asset_class)
+        else:
+            where_clauses.append("etfs.asset_class = ?")
+            values.append(asset_class)
     if distribution_policy:
         where_clauses.append(
             """
@@ -262,16 +263,7 @@ def filters(scope: Literal["neon", "all"] = "neon") -> dict[str, Any]:
     from_sql = "FROM etfs LEFT JOIN offered_products ON offered_products.isin = etfs.isin"
     where_sql = "WHERE offered_products.is_active = 1" if scope == "neon" else ""
     expressions = {
-        "asset_class": """
-            COALESCE(
-                etfs.asset_class,
-                CASE offered_products.instrument_type
-                    WHEN 'stock' THEN 'Stock'
-                    WHEN 'etf' THEN 'ETF'
-                    WHEN 'crypto_etp' THEN 'Crypto & other ETP'
-                END
-            )
-        """,
+        "asset_class": "etfs.asset_class",
         "region": "etfs.region",
         "currency": "etfs.currency",
         "distribution_policy": """
@@ -298,6 +290,21 @@ def filters(scope: Literal["neon", "all"] = "neon") -> dict[str, Any]:
                 """
             ).fetchall()
             result[column] = [row["value"] for row in rows if row["value"]]
+        neon_type_rows = connection.execute(
+            f"""
+            SELECT DISTINCT
+                CASE offered_products.instrument_type
+                    WHEN 'stock' THEN 'Stock'
+                    WHEN 'etf' THEN 'ETF'
+                    WHEN 'crypto_etp' THEN 'Crypto & other ETP'
+                END AS value
+            FROM offered_products
+            {'WHERE offered_products.is_active = 1' if scope == 'neon' else ''}
+            ORDER BY value
+            """
+        ).fetchall()
+        neon_type_values = [row["value"] for row in neon_type_rows if row["value"]]
+        result["asset_class"] = [*neon_type_values, *[value for value in result["asset_class"] if value not in neon_type_values]]
         instrument_rows = connection.execute(
             f"""
             SELECT DISTINCT offered_products.instrument_type AS value

@@ -8,6 +8,7 @@ const elements = {
   totalProducts: document.querySelector("#totalProducts"),
   lastSync: document.querySelector("#lastSync"),
   statusMessage: document.querySelector("#statusMessage"),
+  shownProducts: document.querySelector("#shownProducts"),
   searchInput: document.querySelector("#searchInput"),
   scopeInput: document.querySelector("#scopeInput"),
   assetClassInput: document.querySelector("#assetClassInput"),
@@ -116,9 +117,29 @@ function buildProductQuery() {
   return params.toString();
 }
 
+function clearFilters() {
+  elements.searchInput.value = "";
+  elements.scopeInput.value = "neon";
+  [
+    elements.assetClassInput,
+    elements.regionInput,
+    elements.currencyInput,
+    elements.distributionInput,
+    elements.replicationInput,
+    elements.instrumentTypeInput,
+    elements.zeroFeeInput,
+    elements.sortInput,
+  ].forEach((input) => {
+    input.value = input === elements.sortInput ? "name" : "";
+  });
+  elements.maxTerInput.value = "";
+  elements.minFundSizeInput.value = "";
+  elements.maxRiskInput.value = "";
+}
+
 function renderProducts(items, total) {
   state.products = items;
-  elements.totalProducts.textContent = `${total} product${total === 1 ? "" : "s"}`;
+  elements.shownProducts.textContent = `Showing ${total} product${total === 1 ? "" : "s"}`;
   elements.productsBody.innerHTML = "";
 
   if (!items.length) {
@@ -162,6 +183,11 @@ async function loadProducts() {
   const data = await api(`/api/products?${buildProductQuery()}`);
   renderProducts(data.items, data.total);
   setStatus("Ready");
+}
+
+async function loadDatabaseTotal() {
+  const data = await api("/api/products?scope=neon&limit=1");
+  elements.totalProducts.textContent = `${data.total} product${data.total === 1 ? "" : "s"}`;
 }
 
 async function loadSyncRuns() {
@@ -278,11 +304,16 @@ async function runBusy(button, label, task) {
 
 async function refreshAll() {
   await loadFilters();
+  await loadDatabaseTotal();
   await loadProducts();
   await loadSyncRuns();
 }
 
 document.querySelector("#applyFiltersButton").addEventListener("click", loadProducts);
+document.querySelector("#clearFiltersButton").addEventListener("click", async () => {
+  clearFilters();
+  await refreshAll();
+});
 elements.scopeInput.addEventListener("change", refreshAll);
 elements.searchInput.addEventListener("keydown", (event) => {
   if (event.key === "Enter") loadProducts();
