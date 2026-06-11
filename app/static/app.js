@@ -347,12 +347,17 @@ document.querySelector("#refreshProfilesButton").addEventListener("click", (even
 );
 
 document.querySelector("#refreshChartsButton").addEventListener("click", (event) =>
-  runBusy(event.currentTarget, "Refreshing charts…", () =>
-    api("/api/sync/justetf/charts", {
+  runBusy(event.currentTarget, "Refreshing charts…", async () => {
+    if (!state.selectedIsins.size) {
+      return { message: "Select one or more products before refreshing charts." };
+    }
+    const result = await api("/api/sync/justetf/charts", {
       method: "POST",
       body: JSON.stringify({ isins: Array.from(state.selectedIsins), unclosed: false }),
-    }),
-  ),
+    });
+    await loadPerformance();
+    return result;
+  }),
 );
 
 document.querySelector("#addIsinsButton").addEventListener("click", (event) =>
