@@ -17,22 +17,15 @@
           <h1>Investment cockpit</h1>
         </div>
         <div class="topbar-stats">
-          <span class="hero-card-label">Database</span>
-          <strong id="totalProducts">0 products</strong>
-          <span id="lastSync">No sync yet</span>
+          <span><strong id="totalProducts">0 products</strong> in database</span>
+          <span id="shownProducts" class="status">Showing 0 products</span>
+          <span id="lastSync" class="status">No sync yet</span>
         </div>
       </section>
 
       <section class="panel control-panel">
-        <div class="panel-heading">
-          <div>
-            <p class="eyebrow">Search</p>
-            <h2>Find and filter products</h2>
-          </div>
-          <span class="hint">Some market-data filters appear after justETF enrichment.</span>
-        </div>
-        <div class="control-grid">
-          <label>
+        <div class="filter-toolbar">
+          <label class="search-filter">
             Search
             <input id="searchInput" placeholder="Name, ticker, ISIN" />
           </label>
@@ -99,11 +92,11 @@
               <option value="max_drawdown">Max drawdown</option>
             </select>
           </label>
-        </div>
-        <div class="actions">
-          <button id="applyFiltersButton">Apply filters</button>
-          <button id="clearFiltersButton" class="secondary">Clear filters</button>
-          <a class="button ghost" href="/api/export/snapshot" target="_blank" rel="noreferrer">Export JSON</a>
+          <div class="filter-actions">
+            <button id="applyFiltersButton">Apply</button>
+            <button id="clearFiltersButton" class="secondary">Clear</button>
+            <a class="button ghost" href="/api/export/snapshot" target="_blank" rel="noreferrer">Export</a>
+          </div>
         </div>
 
         <details class="utility-drawer">
@@ -142,7 +135,6 @@
               <h2>Search results</h2>
             </div>
             <div class="status-group">
-              <span id="shownProducts" class="status">Showing 0 products</span>
               <span id="statusMessage" class="status">Ready</span>
             </div>
           </div>
