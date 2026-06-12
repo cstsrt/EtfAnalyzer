@@ -10,7 +10,8 @@ It stores ETF metadata and performance history in SQLite, uses `justetf-scraping
 - Preload and refresh neon's official published instrument universe.
 - Refresh ETF overview/profile/chart data from justETF.
 - Filter by fees, fund size, region, asset class, currency, replication, distribution policy, volatility, drawdown, and return figures.
-- Compare selected ETFs in a zoomable normalized performance chart.
+- Compare selected ETFs in a zoomable normalized performance chart, either in native currency or FX-adjusted to CHF/EUR/USD/GBP.
+- Cache historical FX rates from Frankfurter/ECB data for currency-adjusted comparisons.
 - Store everything in SQLite under `./data`.
 - Export a structured analysis pack as JSON.
 
@@ -37,9 +38,10 @@ http://<mac-mini-tailscale-name-or-ip>:3002
 1. Start the app. On an empty database, it preloads neon's official instrument list automatically.
 2. Click `Refresh neon list` whenever you want to reload neon's latest published list.
 3. Click `Refresh justETF overview`.
-4. Select ETFs and click `Refresh selected profiles` or `Refresh selected charts`.
-5. Filter and compare products.
-6. Export the JSON analysis pack when you want ChatGPT to reason over the saved data.
+4. Select ETFs; chart data and FX rates are fetched automatically when needed.
+5. Click `Refresh selected profiles` if you want deeper justETF profile/allocation data.
+6. Filter and compare products.
+7. Export the JSON analysis pack when you want ChatGPT to reason over the saved data.
 
 ## Notes About Scraping
 
@@ -63,6 +65,7 @@ The older neon page scanner remains available as a fallback: it extracts ISIN-lo
 
 - SQLite database: `./data/etf_analyzer.sqlite3`
 - Export endpoint: `GET /api/export/snapshot`
+- Cached FX table: `fx_rates`, included in the export snapshot.
 
 ## Useful Commands
 

@@ -418,6 +418,25 @@ h3 {
   margin-top: 0;
 }
 
+.chart-control {
+  display: grid;
+  gap: 4px;
+  min-width: 120px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.chart-control select {
+  min-height: 32px;
+  border-radius: 999px;
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .chart-help {
   margin: -6px 0 18px;
   color: var(--muted);

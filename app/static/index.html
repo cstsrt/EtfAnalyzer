@@ -160,6 +160,22 @@
               <h2>Normalized performance</h2>
             </div>
             <div class="actions chart-actions">
+              <label class="chart-control">
+                <span>Mode</span>
+                <select id="currencyModeInput">
+                  <option value="converted" selected>FX-adjusted</option>
+                  <option value="native">Native currency</option>
+                </select>
+              </label>
+              <label class="chart-control">
+                <span>Base</span>
+                <select id="targetCurrencyInput">
+                  <option value="CHF" selected>CHF</option>
+                  <option value="EUR">EUR</option>
+                  <option value="USD">USD</option>
+                  <option value="GBP">GBP</option>
+                </select>
+              </label>
               <button id="resetZoomButton" class="secondary">Reset zoom</button>
             </div>
           </div>

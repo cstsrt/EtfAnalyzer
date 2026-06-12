@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Literal
 
@@ -10,7 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from app import database
-from app.scrapers import justetf_client, neon_client
+from app.scrapers import fx_client, justetf_client, neon_client
 
 
 app = FastAPI(title="neon ETF Analyzer", version="0.1.0")
@@ -79,6 +80,44 @@ def acc_dist_label(value: str | None) -> str | None:
         "n/a": "n/a",
     }
     return labels.get(value or "", value)
+
+
+def normalized_currency(value: str | None) -> str | None:
+    currency = str(value or "").strip().upper()
+    return currency if len(currency) == 3 else None
+
+
+def point_quote(point: dict[str, Any]) -> float | None:
+    return point.get("quote_with_reinvested_dividends") or point.get("quote_with_dividends") or point.get("quote")
+
+
+def shifted_date(value: str, days: int) -> str:
+    return (datetime.fromisoformat(value).date() + timedelta(days=days)).isoformat()
+
+
+def rate_for_date(date: str, sorted_rates: list[tuple[str, float]]) -> float | None:
+    rate = None
+    for rate_date, rate_value in sorted_rates:
+        if rate_date > date:
+            break
+        rate = rate_value
+    return rate
+
+
+def load_cached_or_remote_fx(source_currency: str, target_currency: str, start_date: str, end_date: str) -> dict[str, float]:
+    source = normalized_currency(source_currency)
+    target = normalized_currency(target_currency)
+    if not source or not target or source == target:
+        return {}
+
+    fetch_start = shifted_date(start_date, -7)
+    cached_rates = database.get_fx_rates(source, target, fetch_start, end_date)
+    if cached_rates:
+        return cached_rates
+
+    records = fx_client.load_rates(fetch_start, end_date, source, target)
+    database.upsert_fx_rates(records)
+    return database.get_fx_rates(source, target, fetch_start, end_date)
 
 
 @app.on_event("startup")
@@ -494,11 +533,14 @@ def performance(
     isins: str,
     from_date: str | None = None,
     normalize: bool = True,
+    currency_mode: Literal["converted", "native"] = "converted",
+    target_currency: str = "CHF",
 ) -> dict[str, Any]:
     requested_isins = [isin.strip().upper() for isin in isins.split(",") if isin.strip()]
     if not requested_isins:
         return {"series": []}
 
+    normalized_target = normalized_currency(target_currency) or "CHF"
     with database.connect() as connection:
         series = []
         for isin in requested_isins:
@@ -517,17 +559,69 @@ def performance(
                 values,
             ).fetchall()
             points = [database.row_to_dict(row) for row in rows]
+            name_row = connection.execute("SELECT name, currency FROM etfs WHERE isin = ?", (isin,)).fetchone()
+            source_currency = normalized_currency(name_row["currency"] if name_row else None)
+            conversion_status = "native"
+            fx_rates: dict[str, float] = {}
+            sorted_rates: list[tuple[str, float]] = []
+            if currency_mode == "converted":
+                if not source_currency:
+                    conversion_status = "missing_source_currency"
+                elif source_currency == normalized_target:
+                    conversion_status = "same_currency"
+                elif points:
+                    try:
+                        fx_rates = load_cached_or_remote_fx(source_currency, normalized_target, points[0]["date"], points[-1]["date"])
+                        sorted_rates = sorted(fx_rates.items())
+                        conversion_status = "converted" if sorted_rates else "missing_fx_rates"
+                    except Exception as exc:
+                        conversion_status = f"fx_error: {exc}"
+
             base = None
             if normalize and points:
-                first_point = points[0]
-                base = first_point.get("quote_with_reinvested_dividends") or first_point.get("quote_with_dividends") or first_point.get("quote")
+                for first_point in points:
+                    raw_base = point_quote(first_point)
+                    if raw_base is None:
+                        continue
+                    if currency_mode == "native" or source_currency == normalized_target:
+                        base = raw_base
+                    elif source_currency and sorted_rates:
+                        base_rate = rate_for_date(first_point["date"], sorted_rates)
+                        base = raw_base * base_rate if base_rate else None
+                    if base:
+                        break
             for point in points:
-                raw_value = point.get("quote_with_reinvested_dividends") or point.get("quote_with_dividends") or point.get("quote")
-                point["value"] = ((raw_value / base) - 1) * 100 if normalize and base and raw_value is not None else raw_value
-            name_row = connection.execute("SELECT name FROM etfs WHERE isin = ?", (isin,)).fetchone()
-            series.append({"isin": isin, "name": name_row["name"] if name_row else isin, "points": points})
+                raw_value = point_quote(point)
+                point["native_value"] = raw_value
+                point["source_currency"] = source_currency
+                point["target_currency"] = normalized_target if currency_mode == "converted" else source_currency
+                point["fx_rate"] = None
+                comparable_value = raw_value
+                if currency_mode == "converted":
+                    comparable_value = None
+                    if raw_value is not None and source_currency == normalized_target:
+                        comparable_value = raw_value
+                        point["fx_rate"] = 1
+                    elif raw_value is not None and source_currency and sorted_rates:
+                        fx_rate = rate_for_date(point["date"], sorted_rates)
+                        if fx_rate:
+                            comparable_value = raw_value * fx_rate
+                            point["fx_rate"] = fx_rate
+                point["converted_value"] = comparable_value if currency_mode == "converted" else None
+                point["value"] = ((comparable_value / base) - 1) * 100 if normalize and base and comparable_value is not None else comparable_value
+            series.append(
+                {
+                    "isin": isin,
+                    "name": name_row["name"] if name_row else isin,
+                    "source_currency": source_currency,
+                    "target_currency": normalized_target if currency_mode == "converted" else source_currency,
+                    "currency_mode": currency_mode,
+                    "conversion_status": conversion_status,
+                    "points": points,
+                }
+            )
 
-    return {"series": series}
+    return {"series": series, "currency_mode": currency_mode, "target_currency": normalized_target}
 
 
 @app.get("/api/sync/runs")
@@ -583,6 +677,12 @@ def export_snapshot() -> dict[str, Any]:
             database.row_to_dict(row)
             for row in connection.execute("SELECT * FROM performance_points ORDER BY isin, date").fetchall()
         ]
+        fx_rates = [
+            database.row_to_dict(row)
+            for row in connection.execute(
+                "SELECT * FROM fx_rates ORDER BY base_currency, quote_currency, date"
+            ).fetchall()
+        ]
         events = [database.row_to_dict(row) for row in connection.execute("SELECT * FROM market_events ORDER BY event_date").fetchall()]
         sync_history = [database.row_to_dict(row) for row in connection.execute("SELECT * FROM sync_runs ORDER BY id DESC LIMIT 50").fetchall()]
 
@@ -592,6 +692,7 @@ def export_snapshot() -> dict[str, Any]:
         "disclaimer": "Decision-support data only; not financial advice.",
         "etfs": etfs,
         "performance_points": performance_rows,
+        "fx_rates": fx_rates,
         "market_events": events,
         "sync_history": sync_history,
     }

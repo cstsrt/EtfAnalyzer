@@ -123,6 +123,16 @@ def init_db() -> None:
                 PRIMARY KEY (isin, date)
             );
 
+            CREATE TABLE IF NOT EXISTS fx_rates (
+                base_currency TEXT NOT NULL,
+                quote_currency TEXT NOT NULL,
+                date TEXT NOT NULL,
+                rate REAL NOT NULL,
+                source TEXT NOT NULL DEFAULT 'frankfurter',
+                updated_at TEXT NOT NULL,
+                PRIMARY KEY (base_currency, quote_currency, date)
+            );
+
             CREATE TABLE IF NOT EXISTS sync_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 source TEXT NOT NULL,
@@ -145,6 +155,7 @@ def init_db() -> None:
             CREATE INDEX IF NOT EXISTS idx_etfs_name ON etfs(name);
             CREATE INDEX IF NOT EXISTS idx_etfs_filters ON etfs(asset_class, region, currency, distribution_policy, replication);
             CREATE INDEX IF NOT EXISTS idx_performance_isin_date ON performance_points(isin, date);
+            CREATE INDEX IF NOT EXISTS idx_fx_rates_pair_date ON fx_rates(base_currency, quote_currency, date);
             """
         )
         ensure_column(connection, "offered_products", "instrument_type", "TEXT")
@@ -376,3 +387,50 @@ def upsert_performance_point(isin: str, record: dict[str, Any]) -> None:
             """,
             [values[column] for column in columns],
         )
+
+
+def upsert_fx_rates(records: list[dict[str, Any]], source: str = "frankfurter") -> None:
+    if not records:
+        return
+    now = utc_now()
+    with connect() as connection:
+        connection.executemany(
+            """
+            INSERT INTO fx_rates (base_currency, quote_currency, date, rate, source, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(base_currency, quote_currency, date) DO UPDATE SET
+                rate=excluded.rate,
+                source=excluded.source,
+                updated_at=excluded.updated_at
+            """,
+            [
+                (
+                    str(record["base_currency"]).upper(),
+                    str(record["quote_currency"]).upper(),
+                    str(record["date"]),
+                    float(record["rate"]),
+                    source,
+                    now,
+                )
+                for record in records
+                if record.get("base_currency") and record.get("quote_currency") and record.get("date") and record.get("rate")
+            ],
+        )
+
+
+def get_fx_rates(base_currency: str, quote_currency: str, start_date: str, end_date: str) -> dict[str, float]:
+    source = base_currency.strip().upper()
+    target = quote_currency.strip().upper()
+    if source == target:
+        return {}
+    with connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT date, rate
+            FROM fx_rates
+            WHERE base_currency = ? AND quote_currency = ? AND date BETWEEN ? AND ?
+            ORDER BY date
+            """,
+            (source, target, start_date, end_date),
+        ).fetchall()
+    return {row["date"]: row["rate"] for row in rows}

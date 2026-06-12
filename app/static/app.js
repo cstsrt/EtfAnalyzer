@@ -56,6 +56,8 @@ const elements = {
   columnControls: document.querySelector("#columnControls"),
   resetColumnsButton: document.querySelector("#resetColumnsButton"),
   manualIsins: document.querySelector("#manualIsins"),
+  currencyModeInput: document.querySelector("#currencyModeInput"),
+  targetCurrencyInput: document.querySelector("#targetCurrencyInput"),
   chartHelp: document.querySelector("#chartHelp"),
 };
 
@@ -522,28 +524,56 @@ async function loadPerformance() {
     return;
   }
 
-  const data = await api(`/api/performance?isins=${encodeURIComponent(isins.join(","))}&normalize=true`);
-  const seriesWithPoints = data.series.filter((series) => series.points.length > 0);
-  const missingSeries = data.series.filter((series) => series.points.length === 0);
+  const params = new URLSearchParams({
+    isins: isins.join(","),
+    normalize: "true",
+    currency_mode: elements.currencyModeInput.value,
+    target_currency: elements.targetCurrencyInput.value,
+  });
+  const data = await api(`/api/performance?${params.toString()}`);
+  const hasChartValue = (series) => series.points.some((point) => point.value !== null && point.value !== undefined);
+  const seriesWithPoints = data.series.filter(hasChartValue);
+  const missingSeries = data.series.filter((series) => !hasChartValue(series));
+  const isConverted = data.currency_mode === "converted";
+  const targetCurrency = data.target_currency || elements.targetCurrencyInput.value;
   if (!seriesWithPoints.length) {
     if (state.chart) {
       state.chart.destroy();
       state.chart = null;
     }
     elements.chartHelp.innerHTML =
-      "No saved chart data for the selected instruments yet. Chart data is fetched automatically for ETFs; stocks and some ETPs are not available from justETF.";
+      isConverted
+        ? `No ${targetCurrency}-adjusted chart values yet. The app needs saved justETF chart data plus source currency and FX rates for the selected instruments.`
+        : "No saved chart data for the selected instruments yet. Chart data is fetched automatically for ETFs; stocks and some ETPs are not available from justETF.";
     return;
   }
 
-  elements.chartHelp.textContent = missingSeries.length
-    ? `Showing ${seriesWithPoints.length} product${seriesWithPoints.length === 1 ? "" : "s"}. ${missingSeries.length} selected instrument${missingSeries.length === 1 ? " has" : "s have"} no saved justETF chart data.`
-    : "Drag to pan, scroll/pinch to zoom. Values are normalized from each product’s first saved chart date.";
+  const conversionWarnings = data.series.filter(
+    (series) =>
+      series.points.length > 0 &&
+      !["converted", "same_currency", "native"].includes(series.conversion_status || ""),
+  );
+  const helpParts = [
+    isConverted
+      ? `FX-adjusted to ${targetCurrency} using cached Frankfurter/ECB rates, then normalized from each product’s first converted chart value.`
+      : "Native-currency chart values are normalized from each product’s first saved chart value.",
+    "Drag to pan, scroll/pinch to zoom.",
+  ];
+  if (missingSeries.length) {
+    helpParts.push(`${missingSeries.length} selected instrument${missingSeries.length === 1 ? " is" : "s are"} hidden because chart or conversion data is incomplete.`);
+  }
+  if (conversionWarnings.length) {
+    helpParts.push("Refresh justETF overview if a selected ETF is missing its source currency.");
+  }
+  elements.chartHelp.textContent = helpParts.join(" ");
 
   const labels = Array.from(new Set(seriesWithPoints.flatMap((series) => series.points.map((point) => point.date)))).sort();
   const datasets = seriesWithPoints.map((series, index) => {
     const pointMap = new Map(series.points.map((point) => [point.date, point.value]));
     return {
-      label: `${series.name || series.isin}`,
+      label: isConverted
+        ? `${series.name || series.isin} (${series.source_currency || "?"}→${targetCurrency})`
+        : `${series.name || series.isin} (${series.source_currency || "native"})`,
       data: labels.map((label) => pointMap.get(label) ?? null),
       borderColor: chartColors(index),
       backgroundColor: chartColors(index),
@@ -581,7 +611,7 @@ async function loadPerformance() {
       scales: {
         y: {
           ticks: { callback: (value) => `${value}%` },
-          title: { display: true, text: "Return since first shared date" },
+          title: { display: true, text: isConverted ? `Return since first converted value (${targetCurrency})` : "Return since first native value" },
         },
         x: { ticks: { maxTicksLimit: 10 } },
       },
@@ -711,6 +741,8 @@ document.querySelector("#addIsinsButton").addEventListener("click", (event) =>
 document.querySelector("#resetZoomButton").addEventListener("click", () => {
   if (state.chart) state.chart.resetZoom();
 });
+elements.currencyModeInput.addEventListener("change", loadPerformance);
+elements.targetCurrencyInput.addEventListener("change", loadPerformance);
 
 loadColumnConfig();
 renderColumnControls();
